@@ -3,6 +3,8 @@ MonoZone Pi Controller - Main Application
 
 REST API server for controlling Monoprice 6-Zone Audio via iTach Flex.
 Includes scheduling support for automated zone control.
+
+GitHub: https://github.com/twolfekc/monozone-pi
 """
 import asyncio
 import logging
