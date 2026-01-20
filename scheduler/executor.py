@@ -138,32 +138,31 @@ class ScheduleExecutor:
         """Execute the schedule's action on the target zones"""
         action = schedule.action
 
-        match action.type:
-            case TimerActionType.POWER_OFF:
+        if action.type == TimerActionType.POWER_OFF:
+            for zone in zones:
+                await self.connection.set_power(zone, False)
+                logger.debug(f"Zone {zone} powered off")
+
+        elif action.type == TimerActionType.POWER_ON:
+            for zone in zones:
+                await self.connection.set_power(zone, True)
+                logger.debug(f"Zone {zone} powered on")
+
+        elif action.type == TimerActionType.SET_SOURCE:
+            if action.source_id:
                 for zone in zones:
-                    await self.connection.set_power(zone, False)
-                    logger.debug(f"Zone {zone} powered off")
+                    await self.connection.set_source(zone, action.source_id)
+                    logger.debug(f"Zone {zone} source set to {action.source_id}")
 
-            case TimerActionType.POWER_ON:
+        elif action.type == TimerActionType.SET_VOLUME:
+            if action.volume is not None:
                 for zone in zones:
-                    await self.connection.set_power(zone, True)
-                    logger.debug(f"Zone {zone} powered on")
+                    await self.connection.set_volume(zone, action.volume)
+                    logger.debug(f"Zone {zone} volume set to {action.volume}")
 
-            case TimerActionType.SET_SOURCE:
-                if action.source_id:
-                    for zone in zones:
-                        await self.connection.set_source(zone, action.source_id)
-                        logger.debug(f"Zone {zone} source set to {action.source_id}")
-
-            case TimerActionType.SET_VOLUME:
-                if action.volume is not None:
-                    for zone in zones:
-                        await self.connection.set_volume(zone, action.volume)
-                        logger.debug(f"Zone {zone} volume set to {action.volume}")
-
-            case TimerActionType.APPLY_PRESET:
-                if action.preset_id:
-                    await self._apply_preset(action.preset_id)
+        elif action.type == TimerActionType.APPLY_PRESET:
+            if action.preset_id:
+                await self._apply_preset(action.preset_id)
 
     async def _apply_preset(self, preset_id):
         """Apply a preset"""

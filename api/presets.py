@@ -45,13 +45,29 @@ async def get_preset(preset_id: UUID, db: Database = Depends(get_db)):
 
 @router.post("", response_model=PresetConfig, status_code=201)
 async def create_preset(request: PresetCreate, db: Database = Depends(get_db)):
-    """Create a new preset"""
-    preset = PresetConfig(
-        name=request.name,
-        icon=request.icon,
-        color=request.color,
-        snapshots=request.snapshots,
-    )
+    """Create a new preset or update existing if ID provided"""
+    # If ID provided (iOS sync), check if preset already exists
+    if request.id:
+        existing = await db.get_preset(request.id)
+        if existing:
+            # Update existing preset instead of creating duplicate
+            existing.name = request.name
+            existing.icon = request.icon
+            existing.color = request.color
+            existing.snapshots = request.snapshots
+            return await db.update_preset(existing)
+
+    # Create new preset (with provided ID or auto-generated)
+    preset_data = {
+        "name": request.name,
+        "icon": request.icon,
+        "color": request.color,
+        "snapshots": request.snapshots,
+    }
+    if request.id:
+        preset_data["id"] = request.id
+
+    preset = PresetConfig(**preset_data)
     return await db.create_preset(preset)
 
 
