@@ -82,6 +82,7 @@ class ScheduleConfig(BaseModel):
 class ScheduleCreate(BaseModel):
     """Request body for creating a schedule"""
 
+    id: Optional[UUID] = Field(default=None, description="Optional ID for iOS sync")
     name: str = Field(..., min_length=1, max_length=100)
     time: ScheduleTime
     weekdays: set[int]

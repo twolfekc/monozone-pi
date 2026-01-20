@@ -44,14 +44,37 @@ async def create_schedule(request: ScheduleCreate, db: Database = Depends(get_db
         if not 1 <= day <= 7:
             raise HTTPException(status_code=400, detail="Weekdays must be 1-7")
 
-    schedule = ScheduleConfig(
-        name=request.name,
-        is_enabled=request.is_enabled,
-        time=request.time,
-        weekdays=request.weekdays,
-        target=request.target,
-        action=request.action,
-    )
+    # If ID provided (iOS sync), check if schedule already exists
+    if request.id:
+        existing = await db.get_schedule(request.id)
+        if existing:
+            # Update existing schedule instead of creating duplicate
+            existing.name = request.name
+            existing.is_enabled = request.is_enabled
+            existing.time = request.time
+            existing.weekdays = request.weekdays
+            existing.target = request.target
+            existing.action = request.action
+            result = await db.update_schedule(existing)
+
+            if _on_schedule_change:
+                await _on_schedule_change()
+
+            return result
+
+    # Create new schedule (with provided ID or auto-generated)
+    schedule_data = {
+        "name": request.name,
+        "is_enabled": request.is_enabled,
+        "time": request.time,
+        "weekdays": request.weekdays,
+        "target": request.target,
+        "action": request.action,
+    }
+    if request.id:
+        schedule_data["id"] = request.id
+
+    schedule = ScheduleConfig(**schedule_data)
 
     result = await db.create_schedule(schedule)
 
