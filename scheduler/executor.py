@@ -96,7 +96,7 @@ class ScheduleExecutor:
 
         try:
             # Get target zones
-            zones = self._resolve_target_zones(schedule)
+            zones = await self._resolve_target_zones(schedule)
             logger.info(f"Target zones: {zones}")
 
             # Execute action
@@ -111,8 +111,10 @@ class ScheduleExecutor:
         except Exception as e:
             logger.error(f"Failed to execute schedule '{schedule.name}': {e}")
 
-    def _resolve_target_zones(self, schedule: ScheduleConfig) -> set[int]:
+    async def _resolve_target_zones(self, schedule: ScheduleConfig) -> set[int]:
         """Resolve target zones from schedule configuration"""
+        from uuid import UUID
+
         target = schedule.target
 
         if target.type == TargetType.ALL_ZONES:
@@ -120,7 +122,14 @@ class ScheduleExecutor:
         elif target.type == TargetType.SPECIFIC_ZONES:
             return target.zone_ids or set()
         elif target.type == TargetType.PRESET:
-            # TODO: Load preset and get its zones
+            # Load preset and get its zones
+            if target.preset_id:
+                preset_uuid = target.preset_id if isinstance(target.preset_id, UUID) else UUID(str(target.preset_id))
+                preset = await self.db.get_preset(preset_uuid)
+                if preset:
+                    return {snapshot.zone_id for snapshot in preset.snapshots}
+                else:
+                    logger.warning(f"Preset {target.preset_id} not found for target resolution")
             return set()
 
         return set()
