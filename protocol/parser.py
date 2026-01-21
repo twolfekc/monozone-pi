@@ -87,6 +87,10 @@ class ResponseParser:
             # Decode and strip
             text = response.decode("ascii").strip()
 
+            # Strip # prefix if present (iTach Flex wraps responses)
+            if text.startswith("#"):
+                text = text[1:]
+
             # Must start with >
             if not text.startswith(">"):
                 logger.debug(f"Response doesn't start with '>': {text}")

@@ -25,19 +25,9 @@ pip install -r requirements.txt
 
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
-    echo "Creating .env file..."
-    cat > .env << EOF
-# iTach Flex IP address
-ITACH_HOST=192.168.1.100
-ITACH_PORT=4999
-
-# API server port
-API_PORT=8080
-
-# Logging level (DEBUG, INFO, WARNING, ERROR)
-LOG_LEVEL=INFO
-EOF
-    echo "Please edit .env with your iTach IP address"
+    echo "Creating .env file from template..."
+    cp .env.example .env
+    echo "Created .env with default settings (iTach IP: 192.168.1.70)"
 fi
 
 # Install systemd service
