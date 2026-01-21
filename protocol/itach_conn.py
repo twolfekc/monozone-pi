@@ -37,7 +37,7 @@ class iTachConnection:
         self,
         host: str,
         port: int = 4999,
-        timeout: float = 2.0,
+        timeout: float = 3.0,
         reconnect_delay: float = 5.0,
     ):
         self.host = host
@@ -163,6 +163,7 @@ class iTachConnection:
                     return None
 
                 # Send command
+                logger.debug(f"Sending: {command}")
                 self._writer.write(command)
                 await self._writer.drain()
 
@@ -182,9 +183,11 @@ class iTachConnection:
                         )
                         if chunk:
                             data += chunk
+                            logger.debug(f"Received chunk: {chunk}")
                             # Check if we have a status response
                             for line in data.split(b"\r"):
                                 if b">" in line:
+                                    logger.debug(f"Found response: {line}")
                                     return line + b"\r"
                     except asyncio.TimeoutError:
                         break
@@ -194,6 +197,7 @@ class iTachConnection:
                     if b">" in line:
                         return line + b"\r"
 
+                logger.warning(f"No response with > found in data: {data}")
                 raise asyncio.TimeoutError()
 
         except asyncio.TimeoutError:
