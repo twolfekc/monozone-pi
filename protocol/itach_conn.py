@@ -166,21 +166,25 @@ class iTachConnection:
                 self._writer.write(command)
                 await self._writer.drain()
 
-                # Read responses until we get a status line (starts with > or #>)
-                # iTach sends query echo first (#?ZZ), then status (#>ZZ...)
-                deadline = asyncio.get_event_loop().time() + self.timeout
-                while True:
-                    remaining = deadline - asyncio.get_event_loop().time()
-                    if remaining <= 0:
-                        raise asyncio.TimeoutError()
+                # Read response - iTach sends echo (#?ZZ) then status (#>ZZ...)
+                # Read chunk and find the line with >
+                data = await asyncio.wait_for(
+                    self._reader.read(256), timeout=self.timeout
+                )
 
-                    response = await asyncio.wait_for(
-                        self._reader.readuntil(b"\r"), timeout=remaining
-                    )
+                # Find line containing > (the status response)
+                for line in data.split(b"\r"):
+                    if b">" in line:
+                        return line + b"\r"
 
-                    # Check if this is a status response (contains >)
-                    if b">" in response:
-                        return response
+                # If no > found, the response might be split - read more
+                more = await asyncio.wait_for(
+                    self._reader.read(256), timeout=self.timeout
+                )
+                data += more
+                for line in data.split(b"\r"):
+                    if b">" in line:
+                        return line + b"\r"
 
         except asyncio.TimeoutError:
             logger.warning("Response timeout")
