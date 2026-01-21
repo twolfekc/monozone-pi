@@ -167,24 +167,34 @@ class iTachConnection:
                 await self._writer.drain()
 
                 # Read response - iTach sends echo (#?ZZ) then status (#>ZZ...)
-                # Read chunk and find the line with >
-                data = await asyncio.wait_for(
-                    self._reader.read(256), timeout=self.timeout
-                )
+                # Accumulate data until we find a line with >
+                data = b""
+                deadline = asyncio.get_event_loop().time() + self.timeout
 
-                # Find line containing > (the status response)
+                while asyncio.get_event_loop().time() < deadline:
+                    remaining = deadline - asyncio.get_event_loop().time()
+                    if remaining <= 0:
+                        break
+
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self._reader.read(256), timeout=remaining
+                        )
+                        if chunk:
+                            data += chunk
+                            # Check if we have a status response
+                            for line in data.split(b"\r"):
+                                if b">" in line:
+                                    return line + b"\r"
+                    except asyncio.TimeoutError:
+                        break
+
+                # Final check of accumulated data
                 for line in data.split(b"\r"):
                     if b">" in line:
                         return line + b"\r"
 
-                # If no > found, the response might be split - read more
-                more = await asyncio.wait_for(
-                    self._reader.read(256), timeout=self.timeout
-                )
-                data += more
-                for line in data.split(b"\r"):
-                    if b">" in line:
-                        return line + b"\r"
+                raise asyncio.TimeoutError()
 
         except asyncio.TimeoutError:
             logger.warning("Response timeout")
