@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 # iTach Connection (TCP to IP-RS232 bridge)
-ITACH_HOST = os.getenv("ITACH_HOST", "192.168.1.100")
+ITACH_HOST = os.getenv("ITACH_HOST", "192.168.1.70")
 ITACH_PORT = int(os.getenv("ITACH_PORT", "4999"))
 ITACH_TIMEOUT = 2.0
 ITACH_RECONNECT_DELAY = 5.0
