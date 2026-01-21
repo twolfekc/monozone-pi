@@ -166,12 +166,21 @@ class iTachConnection:
                 self._writer.write(command)
                 await self._writer.drain()
 
-                # Read response (wait for \r terminator)
-                response = await asyncio.wait_for(
-                    self._reader.readuntil(b"\r"), timeout=self.timeout
-                )
+                # Read responses until we get a status line (starts with > or #>)
+                # iTach sends query echo first (#?ZZ), then status (#>ZZ...)
+                deadline = asyncio.get_event_loop().time() + self.timeout
+                while True:
+                    remaining = deadline - asyncio.get_event_loop().time()
+                    if remaining <= 0:
+                        raise asyncio.TimeoutError()
 
-                return response
+                    response = await asyncio.wait_for(
+                        self._reader.readuntil(b"\r"), timeout=remaining
+                    )
+
+                    # Check if this is a status response (contains >)
+                    if b">" in response:
+                        return response
 
         except asyncio.TimeoutError:
             logger.warning("Response timeout")
