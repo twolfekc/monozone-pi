@@ -143,12 +143,53 @@ class iTachConnection:
 
             logger.info("Disconnected from iTach")
 
-    async def _send_receive(self, command: bytes) -> Optional[bytes]:
+    async def _send_command(self, command: bytes) -> bool:
         """
-        Send command and receive response.
+        Send a SET command (no status response expected).
 
         Args:
-            command: Raw command bytes
+            command: Raw command bytes (e.g., <11PR01)
+
+        Returns:
+            True if command was sent and echoed, False on error
+        """
+        if not self._connected:
+            if not await self.connect():
+                return False
+
+        try:
+            async with self._lock:
+                if not self._writer or not self._reader:
+                    return False
+
+                logger.debug(f"Sending SET: {command}")
+                self._writer.write(command)
+                await self._writer.drain()
+
+                # Just wait briefly for echo, SET commands don't return >
+                await asyncio.sleep(0.1)
+
+                # Drain any response
+                try:
+                    data = await asyncio.wait_for(
+                        self._reader.read(256), timeout=0.5
+                    )
+                    logger.debug(f"SET echo: {data}")
+                except asyncio.TimeoutError:
+                    pass
+
+                return True
+
+        except Exception as e:
+            logger.error(f"Send command error: {e}")
+            return False
+
+    async def _send_query(self, command: bytes) -> Optional[bytes]:
+        """
+        Send a QUERY command and wait for status response.
+
+        Args:
+            command: Raw query command bytes (e.g., ?11)
 
         Returns:
             Response bytes or None on error
@@ -162,13 +203,11 @@ class iTachConnection:
                 if not self._writer or not self._reader:
                     return None
 
-                # Send command
-                logger.debug(f"Sending: {command}")
+                logger.debug(f"Sending QUERY: {command}")
                 self._writer.write(command)
                 await self._writer.drain()
 
-                # Read response - iTach sends echo (#?ZZ) then status (#>ZZ...)
-                # Accumulate data until we find a line with >
+                # Read until we get a status response with >
                 data = b""
                 deadline = asyncio.get_event_loop().time() + self.timeout
 
@@ -183,7 +222,7 @@ class iTachConnection:
                         )
                         if chunk:
                             data += chunk
-                            logger.debug(f"Received chunk: {chunk}")
+                            logger.debug(f"Received: {chunk}")
                             # Check if we have a status response
                             for line in data.split(b"\r"):
                                 if b">" in line:
@@ -192,16 +231,16 @@ class iTachConnection:
                     except asyncio.TimeoutError:
                         break
 
-                # Final check of accumulated data
+                # Final check
                 for line in data.split(b"\r"):
                     if b">" in line:
                         return line + b"\r"
 
-                logger.warning(f"No response with > found in data: {data}")
+                logger.warning(f"No response with > in: {data}")
                 raise asyncio.TimeoutError()
 
         except asyncio.TimeoutError:
-            logger.warning("Response timeout")
+            logger.warning("Query timeout")
             self._last_error = "Response timeout"
             await self._handle_disconnect()
         except (ConnectionResetError, BrokenPipeError) as e:
@@ -209,11 +248,22 @@ class iTachConnection:
             self._last_error = str(e)
             await self._handle_disconnect()
         except Exception as e:
-            logger.error(f"Send/receive error: {e}")
+            logger.error(f"Query error: {e}")
             self._last_error = str(e)
             await self._handle_disconnect()
 
         return None
+
+    async def _send_receive(self, command: bytes) -> Optional[bytes]:
+        """
+        Send command and receive response (routes to appropriate method).
+        """
+        # SET commands start with <, QUERY commands start with ?
+        if command.startswith(b"<"):
+            success = await self._send_command(command)
+            return b"OK" if success else None
+        else:
+            return await self._send_query(command)
 
     async def _handle_disconnect(self):
         """Handle unexpected disconnection"""
